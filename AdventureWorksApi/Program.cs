@@ -1,6 +1,9 @@
+using System.Net;
 using System.Text.Json;
 using AdventureWorksApi.Data;
 using AdventureWorksApi.Data.Models;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 
@@ -36,6 +39,38 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (int id, [FromQuery(Name="useCache")]bool useCache, AdventureWorksContext db, IConnectionMultiplexer redis) => 
+{
+    Customer? customer;
+
+    if (useCache)
+    {
+        var redisDb = redis.GetDatabase();
+        var key = $"/api/customers/{id}";
+        var customerJson = await redisDb.StringGetAsync(key);
+
+        if (string.IsNullOrEmpty(customerJson))
+        {
+            customer = await db.Customers.FindAsync(id);
+            await redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(1));
+        }
+        else
+        {
+            customer = JsonSerializer.Deserialize<Customer>(customerJson!);
+        }
+    }
+    else
+    {
+        customer = await db.Customers.FindAsync(id);
+    }
+
+    return customer is not null ? TypedResults.Ok(customer) : TypedResults.NotFound();
+
+}).WithName("GetCustomerById")
+    .Produces<Ok<Customer>>(StatusCodes.Status200OK)
+    .Produces<NotFound>(StatusCodes.Status404NotFound)
+    .WithOpenApi();
+
 app.MapGet("/api/customers", async (AdventureWorksContext db, IConnectionMultiplexer redis) =>
 {
     var redisDb = redis.GetDatabase();
@@ -57,6 +92,7 @@ app.MapGet("/api/customers", async (AdventureWorksContext db, IConnectionMultipl
     return customerList;
 
 }).WithName("GetCustomers")
+  .Produces<List<Customer>>(StatusCodes.Status200OK)
   .WithOpenApi();
 
 
