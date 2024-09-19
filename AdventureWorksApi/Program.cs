@@ -17,6 +17,17 @@ builder.Services.AddDbContext<AdventureWorksContext>(opt =>
     opt.UseSqlServer(builder.Configuration["adventureWorksConnectionString"]));
 builder.Services.AddApplicationInsightsTelemetry();
 builder.Services.AddSingleton<RedisCacheDependencyTracker>();
+builder.Services.AddSingleton<MessagingClient>(sp =>
+{
+    var connectionString = builder.Configuration["serviceBusConnectionString"];
+
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        throw new ArgumentException("Service Bus connection string was not found");
+    }
+
+    return new MessagingClient(connectionString);
+});
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {
@@ -103,6 +114,13 @@ app.MapGet("/api/customers", async (AdventureWorksContext db, IConnectionMultipl
   .Produces<List<Customer>>(StatusCodes.Status200OK)
   .WithOpenApi();
 
+app.MapPost("/api/orders", (MessagingClient messaging) =>
+{
+
+})
+    .WithName("CreateOrder")
+    .Produces(StatusCodes.Status202Accepted)
+    .WithOpenApi();
 
 app.Run();
 
