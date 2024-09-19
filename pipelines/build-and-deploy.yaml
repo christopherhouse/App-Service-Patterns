@@ -1,0 +1,55 @@
+trigger:
+- main
+
+variables:
+  buildConfiguration: 'Release'
+  azureSubscription: 'Contoso-Integration'
+  appServiceName: 'app-ctv-appsvc-eastus2-001'
+  resourceGroupName: 'RG-CTV-APPSVC-EASTUS2-001'
+
+stages:
+- stage: Build
+  displayName: 'Build and Publish'
+  jobs:
+  - job: Build
+    displayName: 'Build Job'
+    pool:
+      vmImage: 'windows-latest'
+    steps:
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '8.x'
+        installationPath: $(Agent.ToolsDirectory)/dotnet
+
+    - script: |
+        dotnet build AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration)
+        dotnet publish AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)
+      displayName: 'Build and Publish Project'
+
+    - publish: $(Build.ArtifactStagingDirectory)
+      artifact: drop
+
+- stage: Deploy
+  displayName: 'Deploy to Azure App Service'
+  dependsOn: Build
+  jobs:
+  - deployment: Deploy
+    displayName: 'Deploy Job'
+    environment: 'production'
+    pool:
+      vmImage: 'windows-latest'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+
+          - task: AzureWebApp@1
+            inputs:
+              azureSubscription: $(azureSubscription)
+              appType: 'webApp'
+              appName: $(appServiceName)
+              package: $(Pipeline.Workspace)/drop
+              resourceGroupName: $(resourceGroupName)
