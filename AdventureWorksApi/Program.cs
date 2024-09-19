@@ -1,9 +1,15 @@
+using AdventureWorksApi.Data;
+using AdventureWorksApi.Data.Models;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddDbContext<AdventureWorksContext>(opt =>
+    opt.UseSqlServer(builder.Configuration["adventureWorksConnectionString"]));
 
 var app = builder.Build();
 
@@ -20,6 +26,12 @@ var summaries = new[]
 {
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
 };
+
+app.MapGet("/api/customers", async (AdventureWorksContext db) =>
+{
+    var customers = await db.Customers.Take(5).ToListAsync();
+    return customers;
+});
 
 app.MapGet("/weatherforecast", () =>
 {
