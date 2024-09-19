@@ -36,7 +36,7 @@ stages:
   jobs:
   - deployment: Deploy
     displayName: 'Deploy Job'
-    environment: 'production'
+    environment: 'Development'
     pool:
       vmImage: 'windows-latest'
     strategy:

@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using AdventureWorksApi.Data;
 using AdventureWorksApi.Data.Models;
