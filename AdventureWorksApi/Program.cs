@@ -114,9 +114,20 @@ app.MapGet("/api/customers", async (AdventureWorksContext db, IConnectionMultipl
   .Produces<List<Customer>>(StatusCodes.Status200OK)
   .WithOpenApi();
 
-app.MapPost("/api/orders", (MessagingClient messaging) =>
+app.MapPost("/api/orders", async (AdventureWorksApi.Data.Models.Order order, MessagingClient messaging,
+    IConfiguration config) =>
 {
+    var orderJson = JsonSerializer.Serialize(order);
+    var queue = config["queueName"];
 
+    if (string.IsNullOrWhiteSpace(queue))
+    {
+        throw new ArgumentException("Queue name was not found");
+    }
+
+    await messaging.SendMessageAsync(queue, orderJson);
+
+    return Results.Accepted();
 })
     .WithName("CreateOrder")
     .Produces(StatusCodes.Status202Accepted)
