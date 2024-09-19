@@ -133,5 +133,12 @@ app.MapPost("/api/orders", async (AdventureWorksApi.Data.Models.Order order, Mes
     .Produces(StatusCodes.Status202Accepted)
     .WithOpenApi();
 
+app.MapGet("/api/orders/status/{orderId}", () =>
+    {
+
+    }).WithName("GetOrderStatus")
+    .Produces(StatusCodes.Status200OK)
+    .WithOpenApi();
+
 app.Run();
 
