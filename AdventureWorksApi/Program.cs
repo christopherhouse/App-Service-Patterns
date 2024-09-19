@@ -1,6 +1,7 @@
 using System.Text.Json;
 using AdventureWorksApi.Data;
 using AdventureWorksApi.Data.Models;
+using AdventureWorksApi.Services;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AdventureWorksContext>(opt =>
     opt.UseSqlServer(builder.Configuration["adventureWorksConnectionString"]));
+builder.Services.AddApplicationInsightsTelemetry();
+builder.Services.AddSingleton<RedisCacheDependencyTracker>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {
@@ -38,7 +41,11 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (int id, [FromQuery(Name="useCache")]bool useCache, AdventureWorksContext db, IConnectionMultiplexer redis) => 
+app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (int id, 
+        [FromQuery(Name="useCache")]bool useCache,
+        AdventureWorksContext db, 
+        IConnectionMultiplexer redis,
+        RedisCacheDependencyTracker tracker) => 
 {
     Customer? customer;
 
@@ -46,12 +53,14 @@ app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (i
     {
         var redisDb = redis.GetDatabase();
         var key = $"/api/customers/{id}";
-        var customerJson = await redisDb.StringGetAsync(key);
+        //var customerJson = await redisDb.StringGetAsync(key);
+        var customerJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomerCache");
 
         if (string.IsNullOrEmpty(customerJson))
         {
             customer = await db.Customers.FindAsync(id);
-            await redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(1));
+            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(1)), "SetCustomerCache");
+            //await redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(1));
         }
         else
         {
