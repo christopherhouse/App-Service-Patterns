@@ -62,6 +62,7 @@ stages:
               appName: $(appServiceName)
               package: $(Pipeline.Workspace)/drop/webapi
               resourceGroupName: $(resourceGroupName)
+              slotName: $(slotName)
 
           - task: AzureFunctionApp@1
             inputs:
@@ -73,6 +74,7 @@ stages:
 
   - job: UpdateTrafficTo25
     displayName: 'Update Traffic to 25%'
+    dependsOn: Deploy
     pool:
       vmImage: 'windows-latest'
     steps:
@@ -82,10 +84,11 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          az webapp traffic-routing set --name $(appServiceName) --resource-group $(resourceGroupName) --distribution $(slotName)=$(trafficPercentage)
+          az webapp traffic-routing set --name $(appServiceName) --resource-group $(resourceGroupName) --distribution $(slotName)=25
 
   - job: ManualApproval50
     displayName: 'Manual Approval to Increase Traffic to 50%'
+    dependsOn: UpdateTrafficTo25
     pool: server
     steps:
     - task: ManualValidation@0
