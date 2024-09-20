@@ -1,6 +1,8 @@
 trigger:
 - main
 
+pr: none
+
 variables:
   buildConfiguration: 'Release'
   azureSubscription: 'Contoso-Integration'
@@ -26,13 +28,11 @@ stages:
 
     - script: |
         mkdir $(Build.ArtifactStagingDirectory)/webapi
-        dotnet build AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration)
         dotnet publish AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration) --runtime win-x64 --output $(Build.ArtifactStagingDirectory)/webapi
       displayName: 'Build and Publish Web API Project'
 
     - script: |
         mkdir $(Build.ArtifactStagingDirectory)/function
-        dotnet build AdventureWorks.AsyncProcessing/AdventureWorks.AsyncProcessing.csproj --configuration $(buildConfiguration)
         dotnet publish AdventureWorks.AsyncProcessing/AdventureWorks.AsyncProcessing.csproj --configuration $(buildConfiguration) --runtime win-x64 --output $(Build.ArtifactStagingDirectory)/function
       displayName: 'Build and Publish Function App Project'
 
