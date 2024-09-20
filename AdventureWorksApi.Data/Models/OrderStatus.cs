@@ -7,4 +7,6 @@ public class OrderStatus
     public int CustomerId { get; set; }
 
     public string Status { get; set; } = null!;
+
+    public int OrderStatusId { get; set; }
 }

@@ -114,11 +114,16 @@ app.MapGet("/api/customers", async (AdventureWorksContext db, IConnectionMultipl
   .Produces<List<Customer>>(StatusCodes.Status200OK)
   .WithOpenApi();
 
-app.MapPost("/api/orders", async (AdventureWorksApi.Data.Models.Order order, MessagingClient messaging,
-    IConfiguration config) =>
+app.MapPost("/api/orders", async (AdventureWorksApi.Data.Models.Order order, 
+        MessagingClient messaging,
+        IConfiguration config,
+        AdventureWorksContext db) =>
 {
-    var orderJson = JsonSerializer.Serialize(order);
     var queue = config["queueName"];
+    var orderNumber = Guid.NewGuid().ToString();
+    order.OrderNumber = orderNumber;
+
+    var orderJson = JsonSerializer.Serialize(order);
 
     if (string.IsNullOrWhiteSpace(queue))
     {
@@ -127,17 +132,27 @@ app.MapPost("/api/orders", async (AdventureWorksApi.Data.Models.Order order, Mes
 
     await messaging.SendMessageAsync(queue, orderJson);
 
+    var status = new OrderStatus
+    {
+        CustomerId = order.CustomerId,
+        OrderNumber = orderNumber,
+        Status = "Received"
+    };
+
+    await db.OrderStatuses.AddAsync(status);
+    await db.SaveChangesAsync();
+
     return Results.Accepted();
 })
     .WithName("CreateOrder")
     .Produces(StatusCodes.Status202Accepted)
     .WithOpenApi();
 
-app.MapGet("/api/orders/status/{orderId}", () =>
+app.MapGet("/api/orders/status/{orderId}", (AdventureWorksContext db) =>
     {
 
     }).WithName("GetOrderStatus")
-    .Produces(StatusCodes.Status200OK)
+    .Produces<OrderStatus>(StatusCodes.Status200OK)
     .WithOpenApi();
 
 app.Run();
