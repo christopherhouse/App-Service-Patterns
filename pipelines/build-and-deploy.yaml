@@ -27,13 +27,13 @@ stages:
         mkdir $(Build.ArtifactStagingDirectory)/webapi
         dotnet build AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration)
         dotnet publish AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/webapi
-      displayName: 'Build and Publish Project'
+      displayName: 'Build and Publish Web API Project'
 
     - script: |
         mkdir $(Build.ArtifactStagingDirectory)/function
         dotnet build AdventureWorks.AsyncProcessing/AdventureWorks.AsyncProcessing.csproj --configuration $(buildConfiguration)
         dotnet publish AdventureWorks.AsyncProcessing/AdventureWorks.AsyncProcessing.csproj --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/function
-      displayName: 'Build and Publish Project'
+      displayName: 'Build and Publish Function App Project'
 
     - publish: $(Build.ArtifactStagingDirectory)
       artifact: drop
