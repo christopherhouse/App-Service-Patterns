@@ -16,7 +16,7 @@ stages:
   - job: Build
     displayName: 'Build Job'
     pool:
-      vmImage: 'windows-latest'
+      vmImage: 'ubuntu-latest'
     steps:
     - task: UseDotNet@2
       inputs:
@@ -47,7 +47,7 @@ stages:
     displayName: 'Deploy Job'
     environment: 'Development'
     pool:
-      vmImage: 'windows-latest'
+      vmImage: 'ubuntu-latest'
     strategy:
       runOnce:
         deploy:
@@ -76,7 +76,7 @@ stages:
     displayName: 'Update Traffic to 25%'
     dependsOn: Deploy
     pool:
-      vmImage: 'windows-latest'
+      vmImage: 'ubuntu-latest'
     steps:
     - task: AzureCLI@2
       inputs:
@@ -99,7 +99,7 @@ stages:
     displayName: 'Update Traffic to 50%'
     dependsOn: ManualApproval50
     pool:
-      vmImage: 'windows-latest'
+      vmImage: 'ubuntu-latest'
     steps:
     - task: AzureCLI@2
       inputs:
@@ -122,7 +122,7 @@ stages:
     displayName: 'Update Traffic to 75%'
     dependsOn: ManualApproval75
     pool:
-      vmImage: 'windows-latest'
+      vmImage: 'ubuntu-latest'
     steps:
     - task: AzureCLI@2
       inputs:
@@ -145,7 +145,7 @@ stages:
     displayName: 'Swap Staging and Production Slots'
     dependsOn: ManualApprovalSwap
     pool:
-      vmImage: 'windows-latest'
+      vmImage: 'ubuntu-latest'
     steps:
     - task: AzureCLI@2
       inputs:
