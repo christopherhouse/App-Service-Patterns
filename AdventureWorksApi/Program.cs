@@ -65,14 +65,12 @@ app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (i
     {
         var redisDb = redis.GetDatabase();
         var key = $"/api/customers/{id}";
-        //var customerJson = await redisDb.StringGetAsync(key);
         var customerJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomerCache");
 
         if (string.IsNullOrEmpty(customerJson))
         {
             customer = await db.Customers.FindAsync(id);
             await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(1)), "SetCustomerCache");
-            //await redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(1));
         }
         else
         {
@@ -93,6 +91,7 @@ app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (i
 
 app.MapGet("/api/customers", async (AdventureWorksContext db,
         IConnectionMultiplexer redis,
+        RedisCacheDependencyTracker tracker,
         [FromQuery(Name = "pageNumber")]int pageNumber,
         [FromQuery(Name = "pageSize")]int pageSize) =>
 {
@@ -100,7 +99,7 @@ app.MapGet("/api/customers", async (AdventureWorksContext db,
     var key = $"/api/customers?pageNumber={pageNumber}&pageSize={pageSize}";
     PagedResult<Customer> customerList = null!;
 
-    var cachedCustomers = await redisDb.StringGetAsync(key);
+    var cachedCustomers = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomersCache");
 
     if (cachedCustomers.IsNullOrEmpty)
     {
@@ -121,7 +120,7 @@ app.MapGet("/api/customers", async (AdventureWorksContext db,
             Items = customers
         };
 
-        await redisDb.StringSetAsync(key, JsonSerializer.Serialize(customerList), TimeSpan.FromMinutes(1));
+        await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customerList), TimeSpan.FromMinutes(1)), "SetCustomersCache");
     }
     else
     {
