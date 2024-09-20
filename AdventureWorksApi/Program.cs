@@ -67,12 +67,12 @@ app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (i
     {
         var redisDb = redis.GetDatabase();
         var key = $"/api/customers/{id}";
-        var customerJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomerCache");
+        var customerJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomerCache", key);
 
         if (string.IsNullOrEmpty(customerJson))
         {
             customer = await db.Customers.FindAsync(id);
-            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomerCache");
+            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomerCache", key);
         }
         else
         {
@@ -101,7 +101,7 @@ app.MapGet("/api/customers", async (AdventureWorksContext db,
     var key = $"/api/customers?pageNumber={pageNumber}&pageSize={pageSize}";
     PagedResult<Customer> customerList = null!;
 
-    var cachedCustomers = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomersCache");
+    var cachedCustomers = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomersCache", key);
 
     if (cachedCustomers.IsNullOrEmpty)
     {
@@ -122,7 +122,7 @@ app.MapGet("/api/customers", async (AdventureWorksContext db,
             Items = customers
         };
 
-        await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customerList), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomersCache");
+        await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customerList), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomersCache", key);
     }
     else
     {
@@ -188,7 +188,7 @@ app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus
 
         var cacheKey = $"/api/orders/status/{orderNumber}";
         var redisDb = redis.GetDatabase();
-        var statusJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(cacheKey), "GetStatusCache");
+        var statusJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(cacheKey), "GetStatusCache", cacheKey);
 
         if (!string.IsNullOrWhiteSpace(statusJson))
         {
@@ -198,7 +198,7 @@ app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus
         {
             status = await db.OrderStatuses.FirstOrDefaultAsync(o => o.OrderNumber == orderNumber);
             statusJson = JsonSerializer.Serialize(status);
-            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(cacheKey, statusJson, TimeSpan.FromMinutes(CACHE_MINUTES)), "SetStatusCache");
+            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(cacheKey, statusJson, TimeSpan.FromMinutes(CACHE_MINUTES)), "SetStatusCache", cacheKey);
         }
 
 

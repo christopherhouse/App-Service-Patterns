@@ -13,11 +13,12 @@ public class RedisCacheDependencyTracker
         _telemetryClient = client;
     }
 
-    public async Task<T> ExecuteAndLogAsync<T>(Func<Task<T>> redisMethod, string opName)
+    public async Task<T> ExecuteAndLogAsync<T>(Func<Task<T>> redisMethod, string opName, string key)
     {
         using var operation = _telemetryClient.StartOperation<DependencyTelemetry>(opName);
         operation.Telemetry.Name = "Redis";
         operation.Telemetry.Type = "Redis";
+        operation.Telemetry.Data = $"{opName}: {key}";
 
         try
         {
@@ -30,11 +31,12 @@ public class RedisCacheDependencyTracker
         }
     }
 
-    public async Task ExecuteAndLogAsync(Func<Task> redisMethod, string opName)
+    public async Task ExecuteAndLogAsync(Func<Task> redisMethod, string opName, string key)
     {
         using var operation = _telemetryClient.StartOperation<DependencyTelemetry>(opName);
         operation.Telemetry.Name = "Redis";
         operation.Telemetry.Type = "Redis";
+        operation.Telemetry.Data = $"{opName}: {key}";
 
         try
         {
