@@ -5,6 +5,7 @@ variables:
   buildConfiguration: 'Release'
   azureSubscription: 'Contoso-Integration'
   appServiceName: 'app-ctv-appsvc-eastus2-001'
+  functionAppName: 'func-ctv-appsvc-eastus2-001'
   resourceGroupName: 'RG-CTV-APPSVC-EASTUS2-001'
 
 stages:
@@ -23,8 +24,15 @@ stages:
         installationPath: $(Agent.ToolsDirectory)/dotnet
 
     - script: |
+        mkdir $(Build.ArtifactStagingDirectory)/webapi
         dotnet build AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration)
-        dotnet publish AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)
+        dotnet publish AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/webapi
+      displayName: 'Build and Publish Project'
+
+    - script: |
+        mkdir $(Build.ArtifactStagingDirectory)/function
+        dotnet build AdventureWorks.AsyncProcessing/AdventureWorks.AsyncProcessing.csproj --configuration $(buildConfiguration)
+        dotnet publish AdventureWorks.AsyncProcessing/AdventureWorks.AsyncProcessing.csproj --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/function
       displayName: 'Build and Publish Project'
 
     - publish: $(Build.ArtifactStagingDirectory)
@@ -51,5 +59,13 @@ stages:
               azureSubscription: $(azureSubscription)
               appType: 'webApp'
               appName: $(appServiceName)
-              package: $(Pipeline.Workspace)/drop
+              package: $(Pipeline.Workspace)/drop/webapi
+              resourceGroupName: $(resourceGroupName)
+
+          - task: AzureFunctionApp@1
+            inputs:
+              azureSubscription: $(azureSubscription)
+              appType: 'functionApp'
+              appName: $(functionAppName)
+              package: $(Pipeline.Workspace)/drop/function
               resourceGroupName: $(resourceGroupName)
