@@ -3,10 +3,13 @@ using AdventureWorksApi.Data;
 using AdventureWorksApi.Data.Dto;
 using AdventureWorksApi.Data.Models;
 using AdventureWorksApi.Services;
+using Azure.Messaging.ServiceBus;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using StackExchange.Redis;
+using HealthStatus = AdventureWorksApi.Data.Dto.HealthStatus;
 
 const int CACHE_MINUTES = 5;
 
@@ -207,6 +210,66 @@ app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus
     }).WithName("GetOrderStatus")
     .Produces<OrderStatus>(StatusCodes.Status200OK)
     .Produces<NotFound>(StatusCodes.Status404NotFound)
+    .WithOpenApi();
+
+app.MapGet("/api/health", async (AdventureWorksContext db,
+    IConnectionMultiplexer redis,
+    IConfiguration configuration) =>
+    {
+        var sqlHealthy = false;
+        var redisHealthy = false;
+        var serviceBusHealthy = false;
+        var serviceBusConnectionString = configuration["serviceBusConnectionString"];
+
+        if (string.IsNullOrEmpty(serviceBusConnectionString))
+        {
+            throw new ArgumentException("Service Bus connection string was not found");
+        }
+
+        try
+        {
+            await db.Customers.CountAsync();
+            sqlHealthy = true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+
+        try
+        {
+            redisHealthy = redis.IsConnected;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+
+        try
+        {
+            var sbClient = new ServiceBusClient(serviceBusConnectionString);
+            var qClient = sbClient.CreateReceiver(configuration["queueName"]);
+            await qClient.PeekMessageAsync();
+
+            serviceBusHealthy = true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+
+        var response = new HealthStatus
+        {
+            SqlHealthy = sqlHealthy,
+            RedisHealthy = redisHealthy,
+            ServiceBusHealthy = serviceBusHealthy,
+            KeyVaultHealthy = sqlHealthy && redisHealthy && serviceBusHealthy
+        };
+
+        return response;
+    }).WithName("HealthCheck")
+    .Produces(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status500InternalServerError)
     .WithOpenApi();
 
 app.Run();
