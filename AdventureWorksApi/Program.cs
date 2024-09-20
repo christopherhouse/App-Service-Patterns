@@ -3,10 +3,13 @@ using AdventureWorksApi.Data;
 using AdventureWorksApi.Data.Dto;
 using AdventureWorksApi.Data.Models;
 using AdventureWorksApi.Services;
+using Azure.Messaging.ServiceBus;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using StackExchange.Redis;
+using HealthStatus = AdventureWorksApi.Data.Dto.HealthStatus;
 
 const int CACHE_MINUTES = 5;
 
@@ -67,12 +70,12 @@ app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (i
     {
         var redisDb = redis.GetDatabase();
         var key = $"/api/customers/{id}";
-        var customerJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomerCache");
+        var customerJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomerCache", key);
 
         if (string.IsNullOrEmpty(customerJson))
         {
             customer = await db.Customers.FindAsync(id);
-            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomerCache");
+            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomerCache", key);
         }
         else
         {
@@ -101,7 +104,7 @@ app.MapGet("/api/customers", async (AdventureWorksContext db,
     var key = $"/api/customers?pageNumber={pageNumber}&pageSize={pageSize}";
     PagedResult<Customer> customerList = null!;
 
-    var cachedCustomers = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomersCache");
+    var cachedCustomers = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(key), "GetCustomersCache", key);
 
     if (cachedCustomers.IsNullOrEmpty)
     {
@@ -122,7 +125,7 @@ app.MapGet("/api/customers", async (AdventureWorksContext db,
             Items = customers
         };
 
-        await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customerList), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomersCache");
+        await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customerList), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomersCache", key);
     }
     else
     {
@@ -188,7 +191,7 @@ app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus
 
         var cacheKey = $"/api/orders/status/{orderNumber}";
         var redisDb = redis.GetDatabase();
-        var statusJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(cacheKey), "GetStatusCache");
+        var statusJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(cacheKey), "GetStatusCache", cacheKey);
 
         if (!string.IsNullOrWhiteSpace(statusJson))
         {
@@ -198,7 +201,7 @@ app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus
         {
             status = await db.OrderStatuses.FirstOrDefaultAsync(o => o.OrderNumber == orderNumber);
             statusJson = JsonSerializer.Serialize(status);
-            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(cacheKey, statusJson, TimeSpan.FromMinutes(CACHE_MINUTES)), "SetStatusCache");
+            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(cacheKey, statusJson, TimeSpan.FromMinutes(CACHE_MINUTES)), "SetStatusCache", cacheKey);
         }
 
 
@@ -207,6 +210,66 @@ app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus
     }).WithName("GetOrderStatus")
     .Produces<OrderStatus>(StatusCodes.Status200OK)
     .Produces<NotFound>(StatusCodes.Status404NotFound)
+    .WithOpenApi();
+
+app.MapGet("/api/health", async (AdventureWorksContext db,
+    IConnectionMultiplexer redis,
+    IConfiguration configuration) =>
+    {
+        var sqlHealthy = false;
+        var redisHealthy = false;
+        var serviceBusHealthy = false;
+        var serviceBusConnectionString = configuration["serviceBusConnectionString"];
+
+        if (string.IsNullOrEmpty(serviceBusConnectionString))
+        {
+            throw new ArgumentException("Service Bus connection string was not found");
+        }
+
+        try
+        {
+            await db.Customers.CountAsync();
+            sqlHealthy = true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+
+        try
+        {
+            redisHealthy = redis.IsConnected;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+
+        try
+        {
+            var sbClient = new ServiceBusClient(serviceBusConnectionString);
+            var qClient = sbClient.CreateReceiver(configuration["queueName"]);
+            await qClient.PeekMessageAsync();
+
+            serviceBusHealthy = true;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+
+        var response = new HealthStatus
+        {
+            SqlHealthy = sqlHealthy,
+            RedisHealthy = redisHealthy,
+            ServiceBusHealthy = serviceBusHealthy,
+            KeyVaultHealthy = sqlHealthy && redisHealthy && serviceBusHealthy
+        };
+
+        return response;
+    }).WithName("HealthCheck")
+    .Produces(StatusCodes.Status200OK)
+    .Produces(StatusCodes.Status500InternalServerError)
     .WithOpenApi();
 
 app.Run();
