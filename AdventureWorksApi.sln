@@ -5,6 +5,10 @@ VisualStudioVersion = 17.11.35303.130
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AdventureWorksApi", "AdventureWorksApi\AdventureWorksApi.csproj", "{FBA8E1B2-C19C-48B6-9176-3B513002B7CC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AdventureWorksApi.Data", "AdventureWorksApi.Data\AdventureWorksApi.Data.csproj", "{4FD9FDC5-EF35-4B34-BE41-AB51D1EFB1EB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AdventureWorks.AsyncProcessing", "AdventureWorks.AsyncProcessing\AdventureWorks.AsyncProcessing.csproj", "{59E70727-B2E0-4990-8399-86B6B259D08D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +19,14 @@ Global
 		{FBA8E1B2-C19C-48B6-9176-3B513002B7CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FBA8E1B2-C19C-48B6-9176-3B513002B7CC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FBA8E1B2-C19C-48B6-9176-3B513002B7CC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4FD9FDC5-EF35-4B34-BE41-AB51D1EFB1EB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4FD9FDC5-EF35-4B34-BE41-AB51D1EFB1EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4FD9FDC5-EF35-4B34-BE41-AB51D1EFB1EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4FD9FDC5-EF35-4B34-BE41-AB51D1EFB1EB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{59E70727-B2E0-4990-8399-86B6B259D08D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{59E70727-B2E0-4990-8399-86B6B259D08D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{59E70727-B2E0-4990-8399-86B6B259D08D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{59E70727-B2E0-4990-8399-86B6B259D08D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

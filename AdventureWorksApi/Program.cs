@@ -17,6 +17,17 @@ builder.Services.AddDbContext<AdventureWorksContext>(opt =>
     opt.UseSqlServer(builder.Configuration["adventureWorksConnectionString"]));
 builder.Services.AddApplicationInsightsTelemetry();
 builder.Services.AddSingleton<RedisCacheDependencyTracker>();
+builder.Services.AddSingleton<MessagingClient>(sp =>
+{
+    var connectionString = builder.Configuration["serviceBusConnectionString"];
+
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        throw new ArgumentException("Service Bus connection string was not found");
+    }
+
+    return new MessagingClient(connectionString);
+});
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {
@@ -103,6 +114,50 @@ app.MapGet("/api/customers", async (AdventureWorksContext db, IConnectionMultipl
   .Produces<List<Customer>>(StatusCodes.Status200OK)
   .WithOpenApi();
 
+app.MapPost("/api/orders", async (AdventureWorksApi.Data.Dto.OrderDto order, 
+        MessagingClient messaging,
+        IConfiguration config,
+        AdventureWorksContext db) =>
+{
+    var queue = config["queueName"];
+    var orderNumber = Guid.NewGuid().ToString();
+    order.OrderNumber = orderNumber;
+
+    var orderJson = JsonSerializer.Serialize(order);
+
+    if (string.IsNullOrWhiteSpace(queue))
+    {
+        throw new ArgumentException("Queue name was not found");
+    }
+
+    await messaging.SendMessageAsync(queue, orderJson);
+
+    var status = new OrderStatus
+    {
+        CustomerId = order.CustomerId,
+        OrderNumber = orderNumber,
+        Status = "Received"
+    };
+
+    await db.OrderStatuses.AddAsync(status);
+    await db.SaveChangesAsync();
+
+    return Results.Accepted();
+})
+    .WithName("CreateOrder")
+    .Produces(StatusCodes.Status202Accepted)
+    .WithOpenApi();
+
+app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus>, NotFound>> (string orderNumber, AdventureWorksContext db) =>
+    {
+        var orderStatus = await db.OrderStatuses.FirstOrDefaultAsync(o => o.OrderNumber == orderNumber);
+
+        return orderStatus is not null ? TypedResults.Ok(orderStatus) : TypedResults.NotFound();
+
+    }).WithName("GetOrderStatus")
+    .Produces<OrderStatus>(StatusCodes.Status200OK)
+    .Produces<NotFound>(StatusCodes.Status404NotFound)
+    .WithOpenApi();
 
 app.Run();
 

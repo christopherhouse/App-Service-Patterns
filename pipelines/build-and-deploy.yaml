@@ -5,7 +5,9 @@ variables:
   buildConfiguration: 'Release'
   azureSubscription: 'Contoso-Integration'
   appServiceName: 'app-ctv-appsvc-eastus2-001'
+  functionAppName: 'func-ctv-appsvc-eastus2-001'
   resourceGroupName: 'RG-CTV-APPSVC-EASTUS2-001'
+  slotName: 'staging'
 
 stages:
 - stage: Build
@@ -14,7 +16,7 @@ stages:
   - job: Build
     displayName: 'Build Job'
     pool:
-      vmImage: 'windows-latest'
+      vmImage: 'ubuntu-latest'
     steps:
     - task: UseDotNet@2
       inputs:
@@ -23,9 +25,16 @@ stages:
         installationPath: $(Agent.ToolsDirectory)/dotnet
 
     - script: |
+        mkdir $(Build.ArtifactStagingDirectory)/webapi
         dotnet build AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration)
-        dotnet publish AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)
-      displayName: 'Build and Publish Project'
+        dotnet publish AdventureWorksApi/AdventureWorksApi.csproj --configuration $(buildConfiguration) --runtime win-x64 --output $(Build.ArtifactStagingDirectory)/webapi
+      displayName: 'Build and Publish Web API Project'
+
+    - script: |
+        mkdir $(Build.ArtifactStagingDirectory)/function
+        dotnet build AdventureWorks.AsyncProcessing/AdventureWorks.AsyncProcessing.csproj --configuration $(buildConfiguration)
+        dotnet publish AdventureWorks.AsyncProcessing/AdventureWorks.AsyncProcessing.csproj --configuration $(buildConfiguration) --runtime win-x64 --output $(Build.ArtifactStagingDirectory)/function
+      displayName: 'Build and Publish Function App Project'
 
     - publish: $(Build.ArtifactStagingDirectory)
       artifact: drop
@@ -38,7 +47,7 @@ stages:
     displayName: 'Deploy Job'
     environment: 'Development'
     pool:
-      vmImage: 'windows-latest'
+      vmImage: 'ubuntu-latest'
     strategy:
       runOnce:
         deploy:
@@ -51,5 +60,97 @@ stages:
               azureSubscription: $(azureSubscription)
               appType: 'webApp'
               appName: $(appServiceName)
-              package: $(Pipeline.Workspace)/drop
+              package: $(Pipeline.Workspace)/drop/webapi
               resourceGroupName: $(resourceGroupName)
+              slotName: $(slotName)
+
+          - task: AzureFunctionApp@1
+            inputs:
+              azureSubscription: $(azureSubscription)
+              appType: 'functionApp'
+              appName: $(functionAppName)
+              package: $(Pipeline.Workspace)/drop/function
+              resourceGroupName: $(resourceGroupName)
+
+  - job: UpdateTrafficTo25
+    displayName: 'Update Traffic to 25%'
+    dependsOn: Deploy
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az webapp traffic-routing set --name $(appServiceName) --resource-group $(resourceGroupName) --distribution $(slotName)=25
+
+  - job: ManualApproval50
+    displayName: 'Manual Approval to Increase Traffic to 50%'
+    dependsOn: UpdateTrafficTo25
+    pool: server
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        instructions: 'Approve to increase traffic to 50%'
+
+  - job: UpdateTrafficTo50
+    displayName: 'Update Traffic to 50%'
+    dependsOn: ManualApproval50
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az webapp traffic-routing set --name $(appServiceName) --resource-group $(resourceGroupName) --distribution $(slotName)=50
+
+  - job: ManualApproval75
+    displayName: 'Manual Approval to Increase Traffic to 75%'
+    pool: server
+    dependsOn: UpdateTrafficTo50
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        instructions: 'Approve to increase traffic to 75%'
+
+  - job: UpdateTrafficTo75
+    displayName: 'Update Traffic to 75%'
+    dependsOn: ManualApproval75
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az webapp traffic-routing set --name $(appServiceName) --resource-group $(resourceGroupName) --distribution $(slotName)=75
+
+  - job: ManualApprovalSwap
+    displayName: 'Manual Approval to Swap Slots'
+    pool: server
+    dependsOn: UpdateTrafficTo75
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        instructions: 'Approve to swap staging and production slots'
+
+  - job: SwapSlots
+    displayName: 'Swap Staging and Production Slots'
+    dependsOn: ManualApprovalSwap
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: $(azureSubscription)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az webapp deployment slot swap --name $(appServiceName) --resource-group $(resourceGroupName) --slot $(slotName) --target-slot production
