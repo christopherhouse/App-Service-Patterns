@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AdventureWorksApi.Data;
+using AdventureWorksApi.Data.Dto;
 using AdventureWorksApi.Data.Models;
 using AdventureWorksApi.Services;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -90,22 +91,41 @@ app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (i
     .Produces<NotFound>(StatusCodes.Status404NotFound)
     .WithOpenApi();
 
-app.MapGet("/api/customers", async (AdventureWorksContext db, IConnectionMultiplexer redis) =>
+app.MapGet("/api/customers", async (AdventureWorksContext db,
+        IConnectionMultiplexer redis,
+        [FromQuery(Name = "pageNumber")]int pageNumber,
+        [FromQuery(Name = "pageSize")]int pageSize) =>
 {
     var redisDb = redis.GetDatabase();
-    var key = "/api/customers";
-    List<Customer> customerList = null!;
+    var key = $"/api/customers?pageNumber={pageNumber}&pageSize={pageSize}";
+    PagedResult<Customer> customerList = null!;
 
     var cachedCustomers = await redisDb.StringGetAsync(key);
 
     if (cachedCustomers.IsNullOrEmpty)
     {
-        customerList = await db.Customers.Take(5).ToListAsync();
+        var skip = (pageNumber - 1) * pageSize;
+
+        var customers = await db.Customers
+            .Skip(skip)
+            .Take(pageSize)
+            .ToListAsync();
+
+        var totalCustomers = await db.Customers.CountAsync();
+
+        customerList = new PagedResult<Customer>
+        {
+            TotalCount = totalCustomers,
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            Items = customers
+        };
+
         await redisDb.StringSetAsync(key, JsonSerializer.Serialize(customerList), TimeSpan.FromMinutes(1));
     }
     else
     {
-        customerList = JsonSerializer.Deserialize<List<Customer>>(cachedCustomers!)!;
+        customerList = JsonSerializer.Deserialize<PagedResult<Customer>>(cachedCustomers!)!;
     }
     
     return customerList;
@@ -117,13 +137,20 @@ app.MapGet("/api/customers", async (AdventureWorksContext db, IConnectionMultipl
 app.MapPost("/api/orders", async (AdventureWorksApi.Data.Dto.OrderDto order, 
         MessagingClient messaging,
         IConfiguration config,
-        AdventureWorksContext db) =>
+        AdventureWorksContext db,
+        HttpContext http) =>
 {
     var queue = config["queueName"];
+    var statusFormat = config["orderStatusUriFormat"];
     var orderNumber = Guid.NewGuid().ToString();
     order.OrderNumber = orderNumber;
 
     var orderJson = JsonSerializer.Serialize(order);
+
+    if (string.IsNullOrWhiteSpace(statusFormat))
+    {
+        throw new ArgumentException("Order status URI format was not found");   
+    }
 
     if (string.IsNullOrWhiteSpace(queue))
     {
@@ -136,11 +163,14 @@ app.MapPost("/api/orders", async (AdventureWorksApi.Data.Dto.OrderDto order,
     {
         CustomerId = order.CustomerId,
         OrderNumber = orderNumber,
-        Status = "Received"
+        Status = "Received",
+        DateModified = DateTime.UtcNow
     };
 
     await db.OrderStatuses.AddAsync(status);
     await db.SaveChangesAsync();
+    
+    http.Response.Headers.Append("Location", string.Format(statusFormat, orderNumber));
 
     return Results.Accepted();
 })
