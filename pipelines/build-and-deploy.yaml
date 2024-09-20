@@ -52,10 +52,13 @@ stages:
       runOnce:
         deploy:
           steps:
+          - checkout: none
+
           - download: current
             artifact: drop
 
           - task: AzureWebApp@1
+            displayName: 'Deploy Web API to Azure App Service'
             inputs:
               azureSubscription: $(azureSubscription)
               appType: 'webApp'
@@ -65,6 +68,7 @@ stages:
               slotName: $(slotName)
 
           - task: AzureFunctionApp@1
+            displayName: 'Deploy Function to Azure Function App'
             inputs:
               azureSubscription: $(azureSubscription)
               appType: 'functionApp'
@@ -78,7 +82,9 @@ stages:
     pool:
       vmImage: 'ubuntu-latest'
     steps:
+    - checkout: none
     - task: AzureCLI@2
+      displayName: 'Update Staging Traffic to 25%'
       inputs:
         azureSubscription: $(azureSubscription)
         scriptType: 'bash'
@@ -92,6 +98,7 @@ stages:
     pool: server
     steps:
     - task: ManualValidation@0
+      displayName: 'Manual Approval to Increase Traffic to 50%'
       inputs:
         instructions: 'Approve to increase traffic to 50%'
 
@@ -101,7 +108,9 @@ stages:
     pool:
       vmImage: 'ubuntu-latest'
     steps:
+    - checkout: none
     - task: AzureCLI@2
+      displayName: 'Update Staging Traffic to 50%'
       inputs:
         azureSubscription: $(azureSubscription)
         scriptType: 'bash'
@@ -115,6 +124,7 @@ stages:
     dependsOn: UpdateTrafficTo50
     steps:
     - task: ManualValidation@0
+      displayName: 'Manual Approval to Increase Traffic to 75%'
       inputs:
         instructions: 'Approve to increase traffic to 75%'
 
@@ -124,7 +134,9 @@ stages:
     pool:
       vmImage: 'ubuntu-latest'
     steps:
+    - checkout: none
     - task: AzureCLI@2
+      displayName: 'Update Staging Traffic to 75%'
       inputs:
         azureSubscription: $(azureSubscription)
         scriptType: 'bash'
@@ -138,6 +150,7 @@ stages:
     dependsOn: UpdateTrafficTo75
     steps:
     - task: ManualValidation@0
+      displayName: 'Manual Approval to Swap Slots'
       inputs:
         instructions: 'Approve to swap staging and production slots'
 
@@ -147,7 +160,9 @@ stages:
     pool:
       vmImage: 'ubuntu-latest'
     steps:
+    - checkout: none
     - task: AzureCLI@2
+      displayName: 'Swap Staging and Production Slots'
       inputs:
         azureSubscription: $(azureSubscription)
         scriptType: 'bash'
