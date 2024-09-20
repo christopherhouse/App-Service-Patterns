@@ -7,6 +7,7 @@ variables:
   appServiceName: 'app-ctv-appsvc-eastus2-001'
   functionAppName: 'func-ctv-appsvc-eastus2-001'
   resourceGroupName: 'RG-CTV-APPSVC-EASTUS2-001'
+  slotName: 'staging'
 
 stages:
 - stage: Build
@@ -69,3 +70,47 @@ stages:
               appName: $(functionAppName)
               package: $(Pipeline.Workspace)/drop/function
               resourceGroupName: $(resourceGroupName)
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az webapp traffic-routing set --name $(appServiceName) --resource-group $(resourceGroupName) --distribution $(slotName)=$(trafficPercentage)
+
+          - task: ManualValidation@0
+            inputs:
+              instructions: 'Approve to increase traffic to 50%'
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az webapp traffic-routing set --name $(appServiceName) --resource-group $(resourceGroupName) --distribution $(slotName)=50
+
+          - task: ManualValidation@0
+            inputs:
+              instructions: 'Approve to increase traffic to 75%'
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az webapp traffic-routing set --name $(appServiceName) --resource-group $(resourceGroupName) --distribution $(slotName)=75
+
+          - task: ManualValidation@0
+            inputs:
+              instructions: 'Approve to swap staging and production slots'
+
+          - task: AzureCLI@2
+            inputs:
+              azureSubscription: $(azureSubscription)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az webapp deployment slot swap --name $(appServiceName) --resource-group $(resourceGroupName) --slot $(slotName) --target-slot production
