@@ -114,7 +114,7 @@ app.MapGet("/api/customers", async (AdventureWorksContext db, IConnectionMultipl
   .Produces<List<Customer>>(StatusCodes.Status200OK)
   .WithOpenApi();
 
-app.MapPost("/api/orders", async (AdventureWorksApi.Data.Models.Order order, 
+app.MapPost("/api/orders", async (AdventureWorksApi.Data.Dto.OrderDto order, 
         MessagingClient messaging,
         IConfiguration config,
         AdventureWorksContext db) =>

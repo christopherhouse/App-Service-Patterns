@@ -1,4 +1,5 @@
-﻿using AdventureWorksApi.Data.Models;
+﻿using AdventureWorksApi.Data.Dto;
+using AdventureWorksApi.Data.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace AdventureWorksApi.Data;
@@ -31,7 +32,12 @@ public class AdventureWorksContext : DbContext
         {
             entity.ToTable("OrderHeaders", "dbo");
 
-            entity.HasKey(e => e.OrderId);
+            entity.HasKey(e => e.OrderHeaderId);
+
+            entity.HasMany(e => e.LineItems)
+                .WithOne(e => e.Order)
+                .HasForeignKey(e => e.OrderId)
+                .HasPrincipalKey(e => e.OrderHeaderId);
         });
 
         modelBuilder.Entity<OrderLineItem>(entity =>
@@ -39,6 +45,10 @@ public class AdventureWorksContext : DbContext
             entity.ToTable("OrderLineItems", "dbo");
 
             entity.HasKey(e => e.OrderLineItemId);
+
+            entity.Property(e => e.Price)
+                .HasColumnType("decimal(18, 2)")
+                .HasPrecision(18, 2);
         });
 
         modelBuilder.Entity<OrderStatus>(entity =>

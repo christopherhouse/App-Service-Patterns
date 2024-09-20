@@ -2,7 +2,7 @@
 
 public class Order
 {
-    public int OrderId { get; set; }
+    public int OrderHeaderId { get; set; }
 
     public int CustomerId { get; set; }
 
@@ -12,5 +12,5 @@ public class Order
 
     public string OrderStatus { get; set; } = null!;
 
-    public IEnumerable<OrderLineItem> LineItems { get; set; } = null!;
+    public ICollection<OrderLineItem> LineItems { get; set; } = null!;
 }
