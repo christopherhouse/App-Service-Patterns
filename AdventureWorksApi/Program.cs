@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 
+const int CACHE_MINUTES = 5;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -70,7 +72,7 @@ app.MapGet("/api/customers/{id}", async Task<Results<Ok<Customer>, NotFound>> (i
         if (string.IsNullOrEmpty(customerJson))
         {
             customer = await db.Customers.FindAsync(id);
-            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(1)), "SetCustomerCache");
+            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customer), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomerCache");
         }
         else
         {
@@ -120,7 +122,7 @@ app.MapGet("/api/customers", async (AdventureWorksContext db,
             Items = customers
         };
 
-        await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customerList), TimeSpan.FromMinutes(1)), "SetCustomersCache");
+        await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(key, JsonSerializer.Serialize(customerList), TimeSpan.FromMinutes(CACHE_MINUTES)), "SetCustomersCache");
     }
     else
     {
@@ -177,11 +179,30 @@ app.MapPost("/api/orders", async (AdventureWorksApi.Data.Dto.OrderDto order,
     .Produces(StatusCodes.Status202Accepted)
     .WithOpenApi();
 
-app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus>, NotFound>> (string orderNumber, AdventureWorksContext db) =>
+app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus>, NotFound>> (string orderNumber, 
+        AdventureWorksContext db,
+        IConnectionMultiplexer redis,
+        RedisCacheDependencyTracker tracker) =>
     {
-        var orderStatus = await db.OrderStatuses.FirstOrDefaultAsync(o => o.OrderNumber == orderNumber);
+        OrderStatus? status;
 
-        return orderStatus is not null ? TypedResults.Ok(orderStatus) : TypedResults.NotFound();
+        var cacheKey = $"/api/orders/status/{orderNumber}";
+        var redisDb = redis.GetDatabase();
+        var statusJson = await tracker.ExecuteAndLogAsync(() => redisDb.StringGetAsync(cacheKey), "GetStatusCache");
+
+        if (!string.IsNullOrWhiteSpace(statusJson))
+        {
+            status = JsonSerializer.Deserialize<OrderStatus>(statusJson!)!;
+        }
+        else
+        {
+            status = await db.OrderStatuses.FirstOrDefaultAsync(o => o.OrderNumber == orderNumber);
+            statusJson = JsonSerializer.Serialize(status);
+            await tracker.ExecuteAndLogAsync(() => redisDb.StringSetAsync(cacheKey, statusJson, TimeSpan.FromMinutes(CACHE_MINUTES)), "SetStatusCache");
+        }
+
+
+        return status is not null ? TypedResults.Ok(status) : TypedResults.NotFound();
 
     }).WithName("GetOrderStatus")
     .Produces<OrderStatus>(StatusCodes.Status200OK)
