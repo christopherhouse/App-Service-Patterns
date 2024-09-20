@@ -148,11 +148,15 @@ app.MapPost("/api/orders", async (AdventureWorksApi.Data.Models.Order order,
     .Produces(StatusCodes.Status202Accepted)
     .WithOpenApi();
 
-app.MapGet("/api/orders/status/{orderId}", (AdventureWorksContext db) =>
+app.MapGet("/api/orders/status/{orderNumber}", async Task<Results<Ok<OrderStatus>, NotFound>> (string orderNumber, AdventureWorksContext db) =>
     {
+        var orderStatus = await db.OrderStatuses.FirstOrDefaultAsync(o => o.OrderNumber == orderNumber);
+
+        return orderStatus is not null ? TypedResults.Ok(orderStatus) : TypedResults.NotFound();
 
     }).WithName("GetOrderStatus")
     .Produces<OrderStatus>(StatusCodes.Status200OK)
+    .Produces<NotFound>(StatusCodes.Status404NotFound)
     .WithOpenApi();
 
 app.Run();
